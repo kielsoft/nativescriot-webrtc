@@ -12,7 +12,7 @@ export class HelloWorldModel extends Observable {
     console.log("app started.......");
     this.message = "Welcome to {N} :)";
 
-    this.webrtc = new WebRTC();
+    //this.webrtc = new WebRTC();
   }
 
   public buttonClicked(): void  {
