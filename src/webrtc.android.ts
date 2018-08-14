@@ -13,6 +13,8 @@ const {
 
 } = org.webrtc;
 
+const { Runnable } = java.lang
+
 declare const byte;
 
 let localPeer: org.webrtc.PeerConnection;
@@ -21,19 +23,15 @@ let remotePeer: org.webrtc.PeerConnection;
 const executor: java.util.concurrent.ExecutorService = java.util.concurrent.Executors.newSingleThreadExecutor();
 
 on(uncaughtErrorEvent, function (args) {
-    if (args.android) {
-        // For Android applications, args.android is an NativeScriptError.
-        console.log("NativeScriptError: " + args.android);
-    } else if (args.ios) {
-        // For iOS applications, args.ios is NativeScriptError.
-        console.log("NativeScriptError: " + args.ios);
-    }
+    console.log("NativeScriptError: " + ((args.android)? args.android : args.ios));
 });
 
 export class WebRTC extends Common {
 
     public constraints: org.webrtc.MediaConstraints;
     public dataChannel: org.webrtc.DataChannel;
+
+    public _channel: org.webrtc.DataChannel;
 
     public static constraints = new MediaConstraints();
     public static config: any = {
@@ -50,13 +48,13 @@ export class WebRTC extends Common {
     public peerConnection: org.webrtc.PeerConnection;
     public peerConnectionFactory: org.webrtc.PeerConnectionFactory;
 
-    constructor(option?) {
-        option = (!option)? {} : option;
+    constructor(options?) {
+        options = (!options)? {} : options;
 
-        option.config = option.config || {}
+        options.config = options.config || {}
 
-        if(!option.config.iceServers){
-            option.config.iceServers = [
+        if(!options.config.iceServers){
+            options.config.iceServers = [
                 new org.webrtc.PeerConnection.IceServer('stun:stun.l.google.com:19302'),
                 new org.webrtc.PeerConnection.IceServer('stun:stun1.l.google.com:19302'),
                 new org.webrtc.PeerConnection.IceServer('stun:stun2.l.google.com:19302'),
@@ -66,20 +64,31 @@ export class WebRTC extends Common {
             ]
         }
 
-        option.constraints = option.constraints || new MediaConstraints()
-        option.channelConfig = option.channelConfig || new DataChannel.Init();
-        super(option); //automatically calls startConnection()
+        if(typeof options.initiator == 'undefined'){
+            //for testing purpose
+            options.initiator = true;
+        }
+
+        super(options);
+
+        android.startActivity.runOnUiThread(new Runnable({run: () => { this.startConnection() }}));
     }
 
-    startConnection(): org.webrtc.PeerConnection {
+    startConnection(): void {
+
+        this.constraints = new MediaConstraints()
+        this.channelConfig = new DataChannel.Init();
+
         console.log("Attempting connection creation......");
+
+        console.log(this);
 
         let iceServers: any = java.util.Arrays.asList(this.config.iceServers);
 
         PeerConnectionFactory.initialize(
             PeerConnectionFactory.InitializationOptions.builder(ad.getApplicationContext())
-            .setEnableVideoHwAcceleration(this.videoAccelerationEnabled)
-            .setFieldTrials(PeerConnectionFactory.VIDEO_FRAME_EMIT_TRIAL + "/" + PeerConnectionFactory.TRIAL_ENABLED + "/")
+            //.setEnableVideoHwAcceleration(this.videoAccelerationEnabled)
+            //.setFieldTrials(PeerConnectionFactory.VIDEO_FRAME_EMIT_TRIAL + "/" + PeerConnectionFactory.TRIAL_ENABLED + "/")
             .createInitializationOptions()
         );
 
@@ -94,24 +103,24 @@ export class WebRTC extends Common {
 
 
         // //Now create a VideoCapturer instance. Callback methods are there if you want to do something! Duh!
-        const videoCapturerAndroid = this.createVideoCapturer();
+        // const videoCapturerAndroid = this.createVideoCapturer();
 
         // // //Create a VideoSource instance
-        const videoSource: org.webrtc.VideoSource = this.peerConnectionFactory.createVideoSource(true);
-        const localVideoTrack: org.webrtc.VideoTrack = this.peerConnectionFactory.createVideoTrack("VideoTrack_" + this._id, videoSource);
+        // const videoSource: org.webrtc.VideoSource = this.peerConnectionFactory.createVideoSource(true);
+        // const localVideoTrack: org.webrtc.VideoTrack = this.peerConnectionFactory.createVideoTrack("VideoTrack_" + this._id, videoSource);
 
         //create an AudioSource instance
-        const audioSource: org.webrtc.AudioSource = this.peerConnectionFactory.createAudioSource(this.constraints);
-        const localAudioTrack = this.peerConnectionFactory.createAudioTrack("AudioTrack_" + this._id, audioSource);
+        // const audioSource: org.webrtc.AudioSource = this.peerConnectionFactory.createAudioSource(this.constraints);
+        // const localAudioTrack = this.peerConnectionFactory.createAudioTrack("AudioTrack_" + this._id, audioSource);
 
         // let iceServers: any = java.util.Arrays.asList([]);
         
-        this.constraints.mandatory.add(new MediaConstraints.KeyValuePair("offerToReceiveAudio", "false"));
-        this.constraints.mandatory.add(new MediaConstraints.KeyValuePair("offerToReceiveVideo", "false"));
+        // this.constraints.mandatory.add(new MediaConstraints.KeyValuePair("offerToReceiveAudio", "false"));
+        // this.constraints.mandatory.add(new MediaConstraints.KeyValuePair("offerToReceiveVideo", "false"));
 
-        const localStream = this.peerConnectionFactory.createLocalMediaStream("localStream_" + this._id);
-        localStream.addTrack(localVideoTrack);
-        localStream.addTrack(localAudioTrack);
+        // const localStream = this.peerConnectionFactory.createLocalMediaStream("localStream_" + this._id);
+        // localStream.addTrack(localVideoTrack);
+        // localStream.addTrack(localAudioTrack);
 
         
 
@@ -130,30 +139,34 @@ export class WebRTC extends Common {
 
         // localVideoTrack.addRenderer(new VideoRenderer(videoView));
 
-        console.log("**************** done");
-
-        localPeer = this.createPeerConnection(this.peerConnectionFactory, true);
+        
+        this.peerConnection = this.createPeerConnection(this.peerConnectionFactory, true);
         if(this.initiator){
-            this.setupData({
-                channel: localPeer.createDataChannel(this.channelName, this.channelConfig),
-            });
-        }
+            this._debug("will call initiator now.....");
 
-        return this.peerConnection = localPeer;
+            try {
+                this._channel =  this.peerConnection.createDataChannel(this.channelName, this.channelConfig)
+                this.setupData({channel: this._channel});
+            } catch (error) {
+                this._debug("error setting up channel", error);
+            }
+            this._debug("done calliing initiator.....");
+        }
+        this._debug("**************** done");
+        localPeer = this.peerConnection;
     }
 
     setupData (event:{channel: org.webrtc.DataChannel}) {
+        this._debug("got to setupData .....");
+        
         if (!event.channel) {
-          // In some situations `pc.createDataChannel()` returns `undefined` (in wrtc),
-          // which is invalid behavior. Handle it gracefully.
-          // See: https://github.com/feross/simple-peer/issues/163
           throw this.makeError('Data channel event is missing `channel` property', 'ERR_DATA_CHANNEL')
         }
-
-        console.log("setting up channel data .... ");
       
         let channel = event.channel
-        this.channelName = channel.label();
+        let channelName = channel.label();
+
+        this._debug(channelName +  " setting up channel data .... ");
         
         channel.registerObserver(new org.webrtc.DataChannel.Observer({
             onMessage: (buffer: org.webrtc.DataChannel.Buffer) => {
@@ -164,7 +177,7 @@ export class WebRTC extends Common {
                     bytes = new byte[buffer.data.remaining()];
                     buffer.data.get(bytes);
                 }
-                console.log((new java.lang.String(bytes, java.nio.charset.Charset.defaultCharset())).toString());
+                this._debug(channelName + " " + (new java.lang.String(bytes, java.nio.charset.Charset.defaultCharset())).toString());
 
                 //self.push(data)
             },
@@ -174,48 +187,31 @@ export class WebRTC extends Common {
             },
 
 			onStateChange: (): void => {
-                console.log(`channel onStateChange: ${channel.state()}`)
-                android.startActivity.runOnUiThread(new java.lang.Runnable({run: () => {
+                this._debug(`${channelName} channel onStateChange: ${channel.state()}`)
+                android.startActivity.runOnUiThread(new Runnable({run: () => {
                     if (channel.state() == DataChannel.State.OPEN) {
-                        console.log("+++++++++++++++++++++++ channel good to go")
+                        this._debug(`${channelName} +++++++++++++++++++++++ channel good to go`)
                     } else {
-                        console.log("xxxxxxxxxxxxxxxxxxxxx channel NOT good to go")
+                        this._debug(`${channelName} xxxxxxxxxxxxxxxxxxxxx channel NOT good to go`)
                     }
                 }}));
             },
         }));
-        // channel.binaryType = 'arraybuffer'
-      
-        // if (typeof channel.bufferedAmountLowThreshold === 'number') {
-        //   self._channel.bufferedAmountLowThreshold = MAX_BUFFERED_AMOUNT
-        // }
-      
-        // self.channelName = self._channel.label
-      
-        // self._channel.onmessage = function (event) {
-        //   self._onChannelMessage(event)
-        // }
-        // self._channel.onbufferedamountlow = function () {
-        //   self._onChannelBufferedAmountLow()
-        // }
-        // self._channel.onopen = function () {
-        //   self._onChannelOpen()
-        // }
-        // self._channel.onclose = function () {
-        //   self._onChannelClose()
-        // }
-        // self._channel.onerror = function (err) {
-        //   self.destroy(makeError(err, 'ERR_DATA_CHANNEL'))
-        // }
+
       }
 
     startCall(){
         // to test setLocalDescription failure
-        setInterval(()=>{ console.log((new Date).toISOString())}, 1000);
 
-        console.log('creating offer');
-        this.peerConnection.createOffer(this.createSdpObserver(), this.constraints);
-
+        if(this._channel){
+            android.startActivity.runOnUiThread(new Runnable({run: () => {
+                setInterval(()=>{ console.log((new Date).toISOString())}, 1000);
+                console.log('creating offer');
+                this.peerConnection.createOffer(this.createSdpObserver(), this.constraints);
+            }}));
+        } else {
+            this._debug("still waiting for channel to propagate");
+        }
     }
 
     createVideoCapturer(): org.webrtc.VideoCapturer {
@@ -266,15 +262,11 @@ export class WebRTC extends Common {
                     
                     try {
                         if (this.peerConnection) {
-                            console.log("about to set ........")
-                            android.startActivity.runOnUiThread(new java.lang.Runnable({run: () => {
-                                console.log("setting LocalDescription ........")
-                                this.peerConnection.setLocalDescription(this.createSdpObserver(), this.sdpTransform(sessionDescription));
-                                // wont get here
-                                console.log(sessionDescription.description + '---------------- xxxxxxxxxxx');
-                                console.log(JSON.stringify(this.peerConnection.getLocalDescription()));
-                            }}));
-                            
+                            console.log("setting LocalDescription ........")
+                            this.peerConnection.setLocalDescription(this.createSdpObserver(), this.sdpTransform(sessionDescription));
+                            // wont get here
+                            console.log(sessionDescription.description + '---------------- xxxxxxxxxxx');
+                            console.log(JSON.stringify(this.peerConnection.getLocalDescription()));
                         }
                     } catch (error) {
                         console.log('error has occured ', error)
@@ -345,7 +337,7 @@ export class WebRTC extends Common {
             },
         
             onDataChannel: (dataChannel: org.webrtc.DataChannel): void => {
-                console.log(`onDataChannel: ${dataChannel}`);
+                console.log(`onDataChannel: ${dataChannel.label}`);
 
             },
         
@@ -358,7 +350,7 @@ export class WebRTC extends Common {
             },
 
             onTrack: (transceiver: org.webrtc.RtpTransceiver): void => {
-                console.log(`onTrack: ${transceiver}`);
+                console.log(`onTrack: ${transceiver.getMid}`);
             }
     
         });

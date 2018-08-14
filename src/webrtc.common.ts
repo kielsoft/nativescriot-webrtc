@@ -2,7 +2,7 @@ import { Observable } from 'tns-core-modules/data/observable';
 
 export const MAX_BUFFERED_AMOUNT = 64 * 1024;
 
-export class WebRTC {
+export class WebRTC extends Observable {
 
     public initiator: boolean;
     public channelConfig: any;
@@ -65,7 +65,7 @@ export class WebRTC {
     public _interval = null
 
     constructor(option?: any) {
-        //super();
+        super();
 
         option = (!option) ? {} : option;
 
@@ -123,8 +123,6 @@ export class WebRTC {
         this._chunk = null
         this._cb = null
         this._interval = null
-
-        this.peerConnection = this.startConnection();
     }
 
     public makeError(message: string, code: string) {
@@ -146,16 +144,11 @@ export class WebRTC {
         }
     }
 
-    startConnection(): any {
-        console.log("Sorry we can create P2P connection on this platform ......");
-
-        return null;
+    startConnection(): void {
+        console.log("Implementation coming soon ......");
     }
 
-    startCall(): any {
-    }
-
-
+    startCall(): any {}
 
     makeTimeId(afterTime: number = 5) {
 

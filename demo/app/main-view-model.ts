@@ -27,7 +27,7 @@ export class HelloWorldModel extends Observable {
         this.webrtc = new WebRTC();
     }
 
-    console.log('starting offers..............');
+    console.log('start a call..............');
     this.webrtc.startCall();  
     console.log("Initializing.......");
   }
