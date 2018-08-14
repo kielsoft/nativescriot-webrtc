@@ -2,7 +2,7 @@ import { Observable } from 'tns-core-modules/data/observable';
 
 export const MAX_BUFFERED_AMOUNT = 64 * 1024;
 
-export class WebRTC extends Observable {
+export class WebRTC {
 
     public initiator: boolean;
     public channelConfig: any;
@@ -65,7 +65,7 @@ export class WebRTC extends Observable {
     public _interval = null
 
     constructor(option?: any) {
-        super();
+        //super();
 
         option = (!option) ? {} : option;
 

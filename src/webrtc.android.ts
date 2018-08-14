@@ -9,8 +9,11 @@ const {
     Camera1Enumerator,
     EglBase,
     DataChannel,
+    SdpObserver,
 
 } = org.webrtc;
+
+declare const byte;
 
 let localPeer: org.webrtc.PeerConnection;
 let remotePeer: org.webrtc.PeerConnection;
@@ -146,6 +149,8 @@ export class WebRTC extends Common {
           // See: https://github.com/feross/simple-peer/issues/163
           throw this.makeError('Data channel event is missing `channel` property', 'ERR_DATA_CHANNEL')
         }
+
+        console.log("setting up channel data .... ");
       
         let channel = event.channel
         this.channelName = channel.label();
@@ -153,8 +158,13 @@ export class WebRTC extends Common {
         channel.registerObserver(new org.webrtc.DataChannel.Observer({
             onMessage: (buffer: org.webrtc.DataChannel.Buffer) => {
                 //self._onChannelMessage(event)
-                var bytes = buffer.data.array();
-                console.log(new java.lang.String(bytes, "UTF-8"));
+                if(buffer.data.hasArray()){
+                    var bytes = buffer.data.array();
+                } else {
+                    bytes = new byte[buffer.data.remaining()];
+                    buffer.data.get(bytes);
+                }
+                console.log((new java.lang.String(bytes, java.nio.charset.Charset.defaultCharset())).toString());
 
                 //self.push(data)
             },
@@ -165,7 +175,14 @@ export class WebRTC extends Common {
 
 			onStateChange: (): void => {
                 console.log(`channel onStateChange: ${channel.state()}`)
-            }
+                android.startActivity.runOnUiThread(new java.lang.Runnable({run: () => {
+                    if (channel.state() == DataChannel.State.OPEN) {
+                        console.log("+++++++++++++++++++++++ channel good to go")
+                    } else {
+                        console.log("xxxxxxxxxxxxxxxxxxxxx channel NOT good to go")
+                    }
+                }}));
+            },
         }));
         // channel.binaryType = 'arraybuffer'
       
@@ -193,14 +210,11 @@ export class WebRTC extends Common {
       }
 
     startCall(){
-        console.log('creating localSdpObserver');
-        //const localSdpObserver = new CustomSdpObservers(this.peerConnection);
-        //const remoteSdpObserver = new CustomSdpObservers(this._pcRemote);
-
+        // to test setLocalDescription failure
         setInterval(()=>{ console.log((new Date).toISOString())}, 1000);
 
         console.log('creating offer');
-        this.peerConnection.createOffer(new CustomSdpObservers(this.peerConnection), this.constraints);
+        this.peerConnection.createOffer(this.createSdpObserver(), this.constraints);
 
     }
 
@@ -244,8 +258,48 @@ export class WebRTC extends Common {
         return null;
     }
 
+    createSdpObserver() {
+        return new SdpObserver(
+            {
+                onCreateSuccess: (sessionDescription: org.webrtc.SessionDescription): void => {
+                    console.log(`${this._id} onCreateSuccess() called with: sessionDescription = [ ${sessionDescription.description} ]`);
+                    
+                    try {
+                        if (this.peerConnection) {
+                            console.log("about to set ........")
+                            android.startActivity.runOnUiThread(new java.lang.Runnable({run: () => {
+                                console.log("setting LocalDescription ........")
+                                this.peerConnection.setLocalDescription(this.createSdpObserver(), this.sdpTransform(sessionDescription));
+                                // wont get here
+                                console.log(sessionDescription.description + '---------------- xxxxxxxxxxx');
+                                console.log(JSON.stringify(this.peerConnection.getLocalDescription()));
+                            }}));
+                            
+                        }
+                    } catch (error) {
+                        console.log('error has occured ', error)
+                    }
+            
+                    console.log("set now....");
+            
+                },
+                onSetSuccess: (): void => {
+                    console.log(`onSetSuccess() is called`);
+                },
+                onCreateFailure: (errorMessage: string): void => {
+                    console.log(`onCreateFailure() called with: ${errorMessage}`);
+                },
+
+                onSetFailure: (failureMessage: string): void => {
+                    console.log(`onSetFailure() called with: ${failureMessage}`);
+                }
+            }
+        );
+    }
+
     createPeerConnection(factory: org.webrtc.PeerConnectionFactory,  isLocal:boolean) {
-        const rtcConfig: org.webrtc.PeerConnection.RTCConfiguration = new PeerConnection.RTCConfiguration(java.util.Arrays.asList(this.config.iceServers));
+        //const rtcConfig: org.webrtc.PeerConnection.RTCConfiguration = new PeerConnection.RTCConfiguration(java.util.Arrays.asList(this.config.iceServers));
+        const rtcConfig: org.webrtc.PeerConnection.RTCConfiguration = new PeerConnection.RTCConfiguration(java.util.Arrays.asList([]));
         const pcConstraints: org.webrtc.MediaConstraints = new MediaConstraints();
 
         const pcObserver: org.webrtc.PeerConnection.Observer = new org.webrtc.PeerConnection.Observer({
@@ -292,6 +346,7 @@ export class WebRTC extends Common {
         
             onDataChannel: (dataChannel: org.webrtc.DataChannel): void => {
                 console.log(`onDataChannel: ${dataChannel}`);
+
             },
         
             onRenegotiationNeeded : (): void => {
@@ -308,82 +363,8 @@ export class WebRTC extends Common {
     
         });
 
-        return factory.createPeerConnection(rtcConfig, this.constraints, pcObserver);
+        //return factory.createPeerConnection(rtcConfig, this.constraints, pcObserver);
+        return factory.createPeerConnection(java.util.Arrays.asList([]), pcConstraints, pcObserver);
     }
 }
 
-const sdp2 = {
-    onCreateSuccess: (param0: org.webrtc.SessionDescription) => {
-      console.log('makeOffer:onCreateSuccess');
-    },
-
-    onSetSuccess: () => {
-      console.log('makeOffer:onSetSuccess');
-    },
-    onCreateFailure: (errorMessage: string): void => {
-        console.log(`onCreateFailure() called with: ${errorMessage}`);
-    },
-
-    onSetFailure: (failureMessage: string): void => {
-        console.log(`onSetFailure() called with: ${failureMessage}`);
-    }
-  }
-
-
-// org.webrtc.SdpObserver 
-class CustomSdpObservers extends org.webrtc.SdpObserver {
-
-    private _tag: string
-    private _peerConnection: org.webrtc.PeerConnection = null;
-    private _isLocal: boolean;
-
-    constructor(pc?: org.webrtc.PeerConnection) {
-        
-        super();
-
-        if(pc){
-            this._isLocal = localPeer == pc;
-
-            this._tag = `${this._isLocal? 'LOCAL': 'REMOTE'}-SdpObserver:::`;
-            this._peerConnection = pc;
-        }
-        return global.__native(this);
-    }
-
-    onCreateSuccess(sessionDescription: org.webrtc.SessionDescription): void {
-        console.log(`${this._tag} onCreateSuccess() called with: sessionDescription = [ ${sessionDescription.description} ]`);
-        
-        try {
-            if (this._peerConnection) {
-                console.log("about to set ........")
-                executor.execute(new java.lang.Runnable({run: () => {
-                    
-                    let sDesc = sessionDescription;
-                    sDesc
-                    this._peerConnection.setLocalDescription(new org.webrtc.SdpObserver(sdp2), ((sdp)=> { 
-                        return new org.webrtc.SessionDescription(sdp.type, sdp.description);
-                    })(sessionDescription));
-                    // wont get here
-                    console.log(sessionDescription.description + '---------------- xxxxxxxxxxx');
-                    console.log(JSON.stringify(this._peerConnection.getLocalDescription()));
-                }}));
-                
-            }
-        } catch (error) {
-            console.log('error has occured ', error)
-        }
-
-        console.log("set now....");
-
-    }
-    onSetSuccess(): void {
-        console.log(`onSetSuccess() is called`);
-    }
-    onCreateFailure(errorMessage: string): void {
-        console.log(`onCreateFailure() called with: ${errorMessage}`);
-    }
-    onSetFailure(failureMessage: string): void {
-        console.log(`onSetFailure() called with: ${failureMessage}`);
-    }
-    
-}

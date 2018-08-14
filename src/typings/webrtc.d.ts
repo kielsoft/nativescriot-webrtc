@@ -1,3 +1,21 @@
+declare module globalAndroid {
+    export module hardware {
+        export module camera2 {
+            export class CaptureRequest {}
+            export class CameraDevice {}
+            export class CameraCaptureSession {}
+            export class CaptureFailure {}
+            export class CameraManager {}
+        }
+    }
+    export module content {
+        export class Context {}
+    }
+    export module media {
+        export class MediaRecorder {}
+    }
+}
+
 declare module org {
 	export module webrtc {
 		export class AudioProcessingFactory {
