@@ -1,14 +1,34 @@
 import { Observable } from 'tns-core-modules/data/observable';
-import { Webrtc } from 'nativescript-webrtc';
+import { WebRTC } from 'nativescript-webrtc';
 
 export class HelloWorldModel extends Observable {
+  private webrtc: WebRTC;
+
   public message: string;
-  private webrtc: Webrtc;
+  public btnLabel: string = "Click Now";
 
   constructor() {
     super();
+    console.log("app started.......");
+    this.message = "Welcome to {N} :)";
 
-    this.webrtc = new Webrtc();
-    this.message = this.webrtc.message;
+    this.webrtc = new WebRTC();
+  }
+
+  public buttonClicked(): void  {
+
+    if(this.btnLabel == 'Click Now'){
+      this.set('btnLabel', "Click Again");
+    } else {
+      this.set('btnLabel', "Click Now");
+    }
+
+    if(!this.webrtc){
+        this.webrtc = new WebRTC();
+    }
+
+    console.log('starting offers..............');
+    this.webrtc.startCall();  
+    console.log("Initializing.......");
   }
 }

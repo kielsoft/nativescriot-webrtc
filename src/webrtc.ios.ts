@@ -1,5 +1,5 @@
-import { Common } from './webrtc.common';
+import { WebRTC as Common } from './webrtc.common';
 
-export class Webrtc extends Common {
+export class WebRTC extends Common {
 
 }

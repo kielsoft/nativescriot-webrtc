@@ -10,7 +10,13 @@ android {
     generatedDensities = []
     applicationId = "org.nativescript.demo"  
   }  
+  
   aaptOptions {  
     additionalParameters "--no-version-vectors"  
   }  
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_1_8
+    targetCompatibility JavaVersion.VERSION_1_8
+  }
 } 
